@@ -5,7 +5,7 @@ import os
 import random
 from PIL import Image
 
-# --- API AYARLARI ---
+# --- GÜVENLİK ---
 if "HF_TOKEN" in st.secrets:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 else:
@@ -16,87 +16,71 @@ else:
     except:
         HF_TOKEN = os.getenv("HF_TOKEN")
 
-# YENİ ROUTER ADRESİ (Zorunlu Güncelleme)
-# Not: Modeli URL'nin sonuna ekliyoruz
-API_URL_BASE = "https://router.huggingface.co/hf-inference/models/"
-MODEL_ID = "black-forest-labs/FLUX.1-schnell"
+# İLK BAŞARILI OLAN MODEL ADRESİ (Router hatası alırsanız burayı tekrar güncelleriz)
+API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}",
-    "Content-Type": "application/json",
-    "X-Use-Cache": "false" # Her seferinde yeni görsel için önbelleği kapat
-}
-
-st.set_page_config(page_title="BT Görsel Atölyesi v7", layout="centered")
+st.set_page_config(page_title="BT Tasarım v8 - Kalite Odaklı", layout="centered")
 
 # --- FONKSİYOMLAR ---
 
-def translate_and_fix(text):
-    """Metni çevirir ve cümleleri modelin anlayacağı tekil yapıya sokar."""
+def simple_translate(text):
+    """Metni en saf haliyle çevirir, modelin kafasını karıştırmaz."""
     try:
-        base_url = "https://translate.googleapis.com/translate_a/single"
-        params = {"client": "gtx", "sl": "tr", "tl": "en", "dt": "t", "q": text}
-        r = requests.get(base_url, params=params, timeout=5)
-        full_text = "".join([s[0] for s in r.json()[0]])
-        # Noktaları virgüle çevirerek modelin tüm cümleyi okumasını sağlıyoruz
-        return full_text.replace(".", ",").strip()
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
+        r = requests.get(url, timeout=5)
+        # Cümleleri birleştir ama yapıyı bozma
+        return "".join([s[0] for s in r.json()[0]]).strip()
     except:
         return text
 
-def query_flux(payload):
-    """Hugging Face Router API üzerinden istek atar."""
-    endpoint = f"{API_URL_BASE}{MODEL_ID}"
-    response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+def query(payload):
+    # 'X-Use-Cache' parametresini header'a ekleyerek her seferinde taze üretim yapıyoruz
+    response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
     return response
 
 # --- ARAYÜZ ---
-st.title("🎨 Profesyonel Görsel Tasarım v7")
-st.info("Hata Giderildi: Hugging Face Router API (410 Hatası Çözümü)")
+st.title("🎨 Yüksek Kaliteli AI Atölyesi")
+st.write("İlk versiyondaki kaliteye geri dönüldü.")
 
-user_input = st.text_area("Ne çizelim? (Türkçe detaylı yazabilirsiniz):", 
-                          placeholder="Örn: Mavi bir gökyüzü altında, denizde yüzen bir robot...")
+user_input = st.text_input("Görsel açıklamasını yazın:", placeholder="Örn: Ormanda koşan mavi bir robot...")
 
-if st.button("✨ Görseli Oluştur"):
+if st.button("🚀 Kaliteli Görsel Üret"):
     if not HF_TOKEN:
-        st.error("🔑 API Token bulunamadı! Lütfen ayarlardan HF_TOKEN'ı tanımlayın.")
+        st.error("🔑 API Anahtarı eksik!")
     elif not user_input:
-        st.warning("⚠️ Lütfen bir açıklama girin.")
+        st.warning("⚠️ Lütfen bir açıklama yazın.")
     else:
-        with st.status("🔮 Yapay zeka detayları analiz ediyor...") as status:
-            # 1. Çeviri ve Hazırlık
-            eng_prompt = translate_and_fix(user_input)
+        with st.status("💎 Yüksek çözünürlüklü çizim yapılıyor...") as status:
+            eng_prompt = simple_translate(user_input)
             seed = random.randint(0, 999999)
             
-            # 2. İstek Paketi (Payload)
+            # Parametreleri en sade (default) haline getirdik, kaliteyi bu artıracak
             payload = {
                 "inputs": eng_prompt,
-                "parameters": {
-                    "seed": seed,
-                    "target_size": {"width": 1024, "height": 1024}
-                }
+                "parameters": {"seed": seed} 
             }
             
-            status.write(f"🌍 Çeviri: {eng_prompt}")
-            status.write(f"🎲 Seed: {seed}")
+            status.write(f"🌍 İngilizceye çevrildi: {eng_prompt}")
             
-            # 3. API Çağrısı
-            response = query_flux(payload)
+            response = query(payload)
             
             if response.status_code == 200:
                 image = Image.open(io.BytesIO(response.content))
-                st.image(image, caption=f"Başarıyla Üretildi (Seed: {seed})", use_container_width=True)
+                st.image(image, caption="Başarıyla üretildi.", use_container_width=True)
                 
-                # İndirme Butonu
+                # İndirme
                 buf = io.BytesIO()
                 image.save(buf, format="PNG")
-                st.download_button("🖼️ Görseli Bilgisayara Kaydet", buf.getvalue(), f"ai_gorsel_{seed}.png", "image/png")
-                status.update(label="✅ İşlem Tamam!", state="complete")
+                st.download_button("🖼️ Kaydet", buf.getvalue(), f"ai_{seed}.png", "image/png")
+                status.update(label="✅ Tamamlandı!", state="complete")
             
-            elif response.status_code == 503:
-                st.warning("⏳ Model uyanıyor... Lütfen 10 saniye bekleyip tekrar basın.")
+            # Eğer 410 hatası alırsak kullanıcıyı uyaralım
+            elif response.status_code == 410:
+                st.error("Hugging Face bağlantı yolunu kalıcı olarak değiştirmiş. Lütfen bana haber verin, URL'yi tekrar güncelleyelim.")
             else:
-                st.error(f"❌ API Hatası: {response.status_code}")
-                st.code(response.text)
+                st.error(f"Hata: {response.status_code}")
+                st.write(response.text)
 
 st.divider()
-st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi - Bilişim Teknolojileri")
+st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi BT Sınıfı")
