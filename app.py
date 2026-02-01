@@ -2,84 +2,58 @@ import streamlit as st
 import requests
 import io
 import random
-import time
 from PIL import Image
 
-st.set_page_config(page_title="BT Profesyonel Tasarım", layout="centered")
-
-# --- SABİT AYARLAR ---
-# Bu liste, bozuk yüzlerin ve vücutların oluşmasını engeller.
-NEGATIVE_PROMPT = "ugly, deformed, noisy, blurry, distorted, out of focus, bad anatomy, extra limbs, poorly drawn face, poorly drawn hands, missing fingers, mutated, disfigured"
-
-# --- FONKSİYOMLAR ---
+# Sayfa ayarları
+st.set_page_config(page_title="BT Tasarım Atölyesi", layout="centered")
 
 def translate_to_english(text):
-    """Türkçe metni İngilizceye çevirir."""
+    """Metni en temiz şekilde çevirir ve talimatları ayıklar."""
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, timeout=10)
         return "".join([s[0] for s in r.json()[0]]).strip()
     except:
         return text
 
-def generate_with_negative_prompt(positive_prompt):
-    """Negatif prompt desteği ile profesyonel istek atar."""
-    # Pollinations'ın gelişmiş POST servisi
-    url = "https://image.pollinations.ai/p"
-    seed = random.randint(0, 999999)
-    
-    # Yapay zekaya gönderilen profesyonel paket
-    payload = {
-        "prompt": positive_prompt,      # Ne istiyoruz?
-        "negative_prompt": NEGATIVE_PROMPT, # Ne İSTEMİYORUZ? (Düzgün yüzler için kritik)
-        "model": "flux",                # En kaliteli model
-        "width": 1024,
-        "height": 1024,
-        "seed": seed,
-        "nologo": True
-    }
-    
-    try:
-        # Daha sağlam bir bağlantı yöntemi (POST)
-        response = requests.post(url, json=payload, timeout=90)
-        if response.status_code == 200:
-            return response.content, seed
-        else:
-            st.error(f"Sunucu hatası: {response.status_code}")
-            return None, None
-    except Exception as e:
-        st.error(f"Bağlantı sorunu: {e}")
-        return None, None
-
 # --- ARAYÜZ ---
-st.title("🎨 BT Sınıfı - Hatasız Görsel Motoru")
-st.info("Bu versiyon, bozuk yüzleri ve hatalı çizimleri otomatik olarak engeller.")
+st.title("🎨 Profesyonel Görsel Üretim v12")
+st.write("Nusaybin Süleyman Bölünmez Anadolu Lisesi | Kalite ve Hız Odaklı")
 
-user_input = st.text_area("Ne çizmek istiyorsun?", placeholder="Örn: Parkta oynayan mutlu bir çocuk...")
+user_input = st.text_area("Ne çizmek istiyorsun?", 
+                          placeholder="Örn: Okul bahçesinde bayrak töreni yapan çocuklar...")
 
-if st.button("✨ Hatasız Oluştur"):
-    if not user_input:
-        st.warning("Lütfen bir açıklama yazın.")
-    else:
-        with st.status("🛠️ Çizim yapılıyor (Yüzler düzeltiliyor)...", expanded=True) as status:
+if st.button("🚀 Hatasız Üret"):
+    if user_input:
+        with st.status("💎 Görsel Kalitesi Optimize Ediliyor...", expanded=True) as status:
             # 1. Çeviri
             eng_prompt = translate_to_english(user_input)
-            # Kaliteyi artıracak ek terimler
-            full_prompt = f"{eng_prompt}, masterpiece, highly detailed, sharp focus"
-            status.write(f"🌍 İşlenen Komut: {full_prompt}")
             
-            # 2. Üretim (Negatif Promptlu)
-            img_content, seed = generate_with_negative_prompt(full_prompt)
+            # 2. PROMPT MÜHENDİSLİĞİ (Yüzleri düzelten sihirli kelimeler)
+            # Karmaşık cümleler yerine net görsel tanımları ekliyoruz
+            magic_tags = "professional photography, hyper-realistic, 8k, highly detailed faces, clear eyes, cinematic lighting, masterpiece, sharp focus, vibrant colors"
+            final_prompt = f"{eng_prompt}, {magic_tags}"
             
-            if img_content:
-                image = Image.open(io.BytesIO(img_content))
-                st.image(image, caption="Düzeltilmiş Sonuç", use_container_width=True)
-                
-                # İndirme
-                st.download_button("🖼️ Kaydet", img_content, f"temiz_gorsel_{seed}.png", "image/png")
-                status.update(label="✅ Tamamlandı!", state="complete")
-            else:
-                status.update(label="❌ Başarısız Oldu", state="error")
+            # 3. GÜVENLİ BAĞLANTI (404 Hatasını engelleyen direkt yol)
+            seed = random.randint(0, 999999)
+            # 'model=flux' sayesinde en kaliteli çizimi zorunlu kılıyoruz
+            image_url = f"https://image.pollinations.ai/prompt/{final_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+            
+            try:
+                response = requests.get(image_url, timeout=90)
+                if response.status_code == 200:
+                    image = Image.open(io.BytesIO(response.content))
+                    st.image(image, caption="Yapay Zeka Tasarımı Tamamlandı", use_container_width=True)
+                    
+                    # İndirme
+                    st.download_button("🖼️ Görseli Bilgisayara Kaydet", response.content, f"ai_tasarim_{seed}.png", "image/png")
+                    status.update(label="✅ Çizim Hazır!", state="complete")
+                else:
+                    st.error(f"⚠️ Sunucu yanıt vermedi. Hata kodu: {response.status_code}")
+            except Exception as e:
+                st.error(f"Bağlantı kesildi: {e}")
+    else:
+        st.warning("Lütfen bir açıklama yazın.")
 
 st.divider()
-st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi")
+st.caption("Not: Yüzlerin daha net olması için FLUX motoru aktif edildi.")
