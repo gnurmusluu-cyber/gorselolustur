@@ -4,7 +4,7 @@ import io
 import os
 from PIL import Image
 
-# --- GÜVENLİK VE AYARLAR ---
+# --- AYARLAR VE GÜVENLİK ---
 if "HF_TOKEN" in st.secrets:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 else:
@@ -15,68 +15,76 @@ else:
     except:
         HF_TOKEN = os.getenv("HF_TOKEN")
 
-# YENİ API ADRESİ (Hata mesajındaki router adresi)
 API_BASE_URL = "https://router.huggingface.co/hf-inference/models/"
+MODELS = ["black-forest-labs/FLUX.1-schnell", "stabilityai/stable-diffusion-xl-base-1.0"]
 
-MODELS = [
-    "black-forest-labs/FLUX.1-schnell",
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    "runwayml/stable-diffusion-v1-5"
-]
+st.set_page_config(page_title="BT Tasarım Akademisi", layout="wide")
 
-st.set_page_config(page_title="BT Sınıfı AI Tasarım", page_icon="🎨")
+# --- YARDIMCI FONKSİYOMLAR ---
 
-st.title("🎨 Yapay Zeka Görsel Üretim Paneli")
-st.info("Hata Giderildi: Hugging Face Router API Yapılandırması Aktif.")
+# 1. OTOMATİK ÇEVİRİ DESTEĞİ (Google Translate API - Ücretsiz)
+def translate_to_english(text):
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
+        response = requests.get(url)
+        return response.json()[0][0][0]
+    except:
+        return text # Hata olursa orijinali gönder
 
-def generate_image(model_id, prompt_text):
-    # Yeni router endpoint yapısı
+# 2. ANA MODEL (Hugging Face)
+def generate_hf(model_id, prompt_text):
     api_url = f"{API_BASE_URL}{model_id}"
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    
-    try:
-        response = requests.post(api_url, headers=headers, json={"inputs": prompt_text}, timeout=30)
-        return response.content, response.status_code, response.text
-    except Exception as e:
-        return None, 500, str(e)
+    response = requests.post(api_url, headers=headers, json={"inputs": prompt_text}, timeout=30)
+    return response.content, response.status_code
 
-# --- ANAHTARSIZ YEDEK MODEL (Pollinations AI) ---
-def generate_backup_image(prompt_text):
-    # Bu model anahtar istemez, dersin kurtarıcısıdır.
-    url = f"https://image.pollinations.ai/prompt/{prompt_text}?width=1024&height=1024&nologo=true"
+# 3. YENİ YEDEK MODEL (Daha Stabil)
+def generate_backup(prompt_text):
+    # Prodia veya Pollinations alternatif (v2)
+    url = f"https://image.pollinations.ai/prompt/{prompt_text}?width=1024&height=1024&model=flux&nologo=true"
     response = requests.get(url)
     return response.content
 
-prompt = st.text_area("Hayalindekini İngilizce yaz:", placeholder="A futuristic classroom in Mardin...")
+# --- ARAYÜZ ---
+st.title("🎨 Akıllı Görsel Tasarım Atölyesi")
+st.write("Türkçe yazabilirsiniz, sistem otomatik olarak İngilizceye çevirecektir.")
 
-col1, col2 = st.columns(2)
+user_input = st.text_area("Ne hayal ediyorsun? (Örn: Ormanda koşan mavi bir robot)", height=100)
 
-with col1:
-    main_button = st.button("🚀 Ana Modellerle Üret")
-with col2:
-    backup_button = st.button("🆘 Yedek Model (Hızlı)")
+# Stil Seçenekleri
+style = st.selectbox("Görsel Stili Seç:", ["Gerçekçi", "Pixel Art", "Dijital Sanat", "Siberpunk", "Anime"])
+style_prompts = {
+    "Gerçekçi": "high resolution, photorealistic, 8k, cinematic lighting",
+    "Pixel Art": "pixel art, 8-bit style, retro gaming aesthetic",
+    "Dijital Sanat": "digital art, concept art, vibrant colors, trending on artstation",
+    "Siberpunk": "cyberpunk style, neon lights, futuristic, dark atmosphere",
+    "Anime": "anime style, studio ghibli aesthetic, clean lines"
+}
 
-if main_button:
-    if not HF_TOKEN:
-        st.error("🔑 Token bulunamadı!")
+if st.button("🚀 Tasarımı Oluştur"):
+    if not user_input:
+        st.warning("Lütfen bir açıklama yazın.")
     else:
-        success = False
-        with st.status("📡 Yeni Router üzerinden bağlanılıyor...") as status:
-            for model in MODELS:
-                img_data, status_code, error_msg = generate_image(model, prompt)
-                if status_code == 200:
-                    st.image(Image.open(io.BytesIO(img_data)), caption=f"Model: {model}")
-                    success = True
-                    status.update(label="✅ Başarılı!", state="complete")
-                    break
-            if not success:
-                st.error("Hugging Face hala meşgul. Lütfen 'Yedek Model' butonunu deneyin.")
-
-if backup_button:
-    with st.spinner("Yedek motor çalışıyor..."):
-        img_data = generate_backup_image(prompt)
-        st.image(img_data, caption="Yedek Model (Pollinations AI) ile üretildi.")
-        st.success("Ders devam ediyor! Yedek model başarıyla çalıştı.")
+        # OTOMATİK ÇEVİRİ VE PROMPT GÜÇLENDİRME
+        with st.status("🔄 İşlemler yapılıyor...") as status:
+            status.write("📝 Türkçe metin İngilizceye çevriliyor...")
+            english_prompt = translate_to_english(user_input)
+            full_prompt = f"{english_prompt}, {style_prompts[style]}"
+            status.write(f"🌍 Çeviri: {english_prompt}")
+            
+            # ANA MODEL DENEMESİ
+            status.write("📡 Ana modellerle bağlantı kuruluyor...")
+            img_data, status_code = generate_hf(MODELS[0], full_prompt)
+            
+            if status_code == 200:
+                st.image(Image.open(io.BytesIO(img_data)), caption=f"Tasarım: {user_input}")
+                status.update(label="✅ Başarılı!", state="complete")
+            else:
+                # YEDEK MODEL DEVREYE GİRER
+                status.write("⚠️ Ana modeller yoğun, yedek motor çalıştırılıyor...")
+                backup_data = generate_backup(full_prompt)
+                st.image(backup_data, caption=f"Yedek Model ile üretildi: {user_input}")
+                status.update(label="✅ Yedek Model ile Tamamlandı!", state="complete")
 
 st.divider()
-st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi | Bilişim Teknolojileri")
+st.info(f"💡 **Öğrenciler için not:** Senin yazdığın '{user_input}' ifadesi, yapay zekaya daha iyi anlaması için otomatik olarak çevrildi.")
