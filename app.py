@@ -1,91 +1,88 @@
 import streamlit as st
 import requests
-import io
 import os
-import random  # Rastgelelik için eklendi
+import io
 from PIL import Image
+from dotenv import load_dotenv
+import time
 
-# --- API AYARLARI ---
-if "HF_TOKEN" in st.secrets:
-    HF_TOKEN = st.secrets["HF_TOKEN"]
-else:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        HF_TOKEN = os.getenv("HF_TOKEN")
-    except:
-        HF_TOKEN = os.getenv("HF_TOKEN")
+# 1. Güvenlik: .env dosyasındaki değişkenleri yükle
+load_dotenv()
 
-API_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}",
-    "X-Use-Cache": "false"  # Önbelleği devre dışı bırakarak yeni üretim zorlar
-}
+# 2. Yapılandırma
+# Not: .env dosyanızda HF_TOKEN=hf_... şeklinde tanımlı olmalı
+API_TOKEN = os.getenv("HF_TOKEN")
+# Daha hızlı sonuç için 'stable-diffusion-v1-5' yerine bazen daha hafif modeller seçilebilir
+API_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
+headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-st.set_page_config(page_title="BT Görsel Atölyesi v6", layout="centered")
+st.set_page_config(page_title="Yapay Zeka Görsel Oluşturucu", page_icon="🎨")
 
-# --- YARDIMCI FONKSİYOMLAR ---
+st.title("🎨 Bilişim Dersi Görsel Üretim Paneli")
+st.write("Hugging Face API kullanarak görsel oluşturun. Sunucu yoğunsa otomatik olarak tekrar denenecektir.")
 
-def translate_and_clean(text):
-    try:
-        base_url = "https://translate.googleapis.com/translate_a/single"
-        params = {"client": "gtx", "sl": "tr", "tl": "en", "dt": "t", "q": text}
-        r = requests.get(base_url, params=params, timeout=5)
-        # Tüm parçaları birleştir ve noktaları virgüle çevir
-        full_text = "".join([s[0] for s in r.json()[0]])
-        return full_text.replace(".", ",").strip()
-    except:
-        return text
-
-def query_ai(payload):
-    response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-    return response
-
-# --- ARAYÜZ ---
-st.title("🎨 Dinamik AI Görsel Atölyesi")
-st.write("Her 'Oluştur' dediğinde farklı bir sonuç alacaksın.")
-
-user_input = st.text_area("Hayalini yaz:", placeholder="Örn: Karlar içinde bir kedi...")
-
-if st.button("🚀 Yeniden Oluştur"):
-    if not HF_TOKEN:
-        st.error("🔑 API Token eksik!")
-    elif not user_input:
-        st.warning("⚠️ Lütfen bir açıklama girin.")
-    else:
-        with st.status("🔮 Yapay zeka hayal ediyor...") as status:
-            # 1. Çeviri
-            eng_prompt = translate_and_clean(user_input)
+def query_ai(payload, retries=3):
+    """
+    Hugging Face API'ye istek atar. 
+    Timeout ve meşguliyet (503) durumlarını yönetir.
+    """
+    for i in range(retries):
+        try:
+            # timeout=180: Sunucuya 3 dakika süre tanıyoruz
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=180)
             
-            # 2. RASTGELE SEED ÜRETİMİ (Farklılık yaratan anahtar burası)
-            random_seed = random.randint(0, 999999999)
+            # Eğer model henüz yükleniyorsa (503 hatası)
+            if response.status_code == 503:
+                estimated_time = response.json().get('estimated_time', 20)
+                st.warning(f"Model yükleniyor... {int(estimated_time)} saniye bekleniyor. (Deneme {i+1}/{retries})")
+                time.sleep(estimated_time)
+                continue
             
-            # 3. Üretim İsteği
-            payload = {
-                "inputs": eng_prompt,
-                "parameters": {
-                    "seed": random_seed,  # Her seferinde farklı bir matematiksel başlangıç
-                    "guidance_scale": 7.5
-                }
-            }
-            
-            status.write(f"🌍 Çeviri: {eng_prompt}")
-            status.write(f"🎲 Rastgelelik Kodu: {random_seed}")
-            
-            response = query_ai(payload)
-            
+            # Başarılı sonuç
             if response.status_code == 200:
-                image = Image.open(io.BytesIO(response.content))
-                st.image(image, caption=f"Seed: {random_seed}", use_container_width=True)
-                
-                # İndirme
-                buf = io.BytesIO()
-                image.save(buf, format="PNG")
-                st.download_button("🖼️ İndir", buf.getvalue(), f"gorsel_{random_seed}.png", "image/png")
-                status.update(label="✅ Yeni Görsel Hazır!", state="complete")
+                return response.content
+            
+            # Hata durumu
             else:
-                st.error(f"❌ Hata: {response.status_code}")
-                st.write(response.text)
+                st.error(f"Hata Kodu: {response.status_code} - {response.text}")
+                return None
 
-st.divider()
-st.caption("Not: Aynı komutla farklı sonuçlar almak için 'Seed' değerini her seferinde değiştiriyoruz.")
+        except requests.exceptions.ReadTimeout:
+            if i < retries - 1:
+                st.warning("Bağlantı zaman aşımına uğradı, tekrar deneniyor...")
+                time.sleep(5)
+            else:
+                st.error("Üzgünüm, sunucu çok uzun süre cevap vermedi. Lütfen daha sonra tekrar deneyin.")
+        except Exception as e:
+            st.error(f"Beklenmedik bir hata oluştu: {e}")
+            return None
+    return None
+
+# Kullanıcı Arayüzü
+prompt = st.text_input("Hayalinizdeki görseli tarif edin (İngilizce daha iyi sonuç verir):", 
+                       placeholder="A futuristic school with robots and trees...")
+
+if st.button("Görsel Oluştur"):
+    if not API_TOKEN:
+        st.error("Hata: .env dosyasında HF_TOKEN bulunamadı!")
+    elif prompt:
+        with st.spinner("Yapay zeka hayal ediyor... Bu işlem 1-2 dakika sürebilir."):
+            image_bytes = query_ai({"inputs": prompt})
+            
+            if image_bytes:
+                image = Image.open(io.BytesIO(image_bytes))
+                st.image(image, caption=f"Sonuç: {prompt}", use_container_width=True)
+                
+                # İndirme butonu
+                st.download_button(
+                    label="Görseli İndir",
+                    data=image_bytes,
+                    file_name="ai_gorsel.png",
+                    mime="image/png"
+                )
+    else:
+        st.warning("Lütfen bir istem (prompt) girin.")
+
+# Alt Bilgi
+st.markdown("---")
+st.caption("Bilişim Teknolojileri Dersi - Yapay Zeka Uygulamaları Etkinliği")
