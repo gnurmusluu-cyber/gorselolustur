@@ -4,13 +4,13 @@ import io
 import random
 from PIL import Image
 
-# Sayfa Yapılandırması
-st.set_page_config(page_title="BT Tasarım Atölyesi v10", page_icon="🎨", layout="centered")
+# Sayfa tasarımı
+st.set_page_config(page_title="BT Görsel Atölyesi", layout="centered")
 
-# --- YARDIMCI FONKSİYOMLAR ---
+# --- FONKSİYOMLAR ---
 
 def translate_to_english(text):
-    """Google Translate altyapısı ile temiz çeviri yapar."""
+    """Türkçe yazılanı arka planda İngilizceye çevirir."""
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
         r = requests.get(url, timeout=5)
@@ -18,52 +18,41 @@ def translate_to_english(text):
     except:
         return text
 
+def generate_image(prompt_text):
+    """Güvenilir ve anahtarsız bir yüksek kalite motoru kullanır."""
+    seed = random.randint(0, 999999)
+    # Pollinations'ın en güncel ve kaliteli motoru (v-turbo)
+    url = f"https://image.pollinations.ai/prompt/{prompt_text}?width=1024&height=1024&seed={seed}&nologo=true&enhance=true"
+    response = requests.get(url, timeout=60)
+    return response.content, seed
+
 # --- ARAYÜZ ---
-st.title("🎨 Yüksek Kaliteli Tasarım Atölyesi")
-st.write("Detayları kaybetmeyen, yüksek çözünürlüklü yeni nesil motor.")
+st.title("🎨 Yapay Zeka Tasarım Atölyesi")
+st.write("Nusaybin Süleyman Bölünmez Anadolu Lisesi | BT Sınıfı")
 
-user_input = st.text_area("Hayalindeki sahneyi anlat:", placeholder="Örn: Mardin'in tarihi sokaklarında yürüyen siber bir şövalye, gün batımı...")
+user_input = st.text_input("Ne çizmek istersin?", placeholder="Örn: Uzayda piknik yapan bir robot ailesi...")
 
-# Stil Seçenekleri (Görseli Güçlendirir)
-style_choice = st.selectbox("Görsel Tarzı:", ["Foto-Gerçekçi", "Sanatsal Çizim", "3D Render", "Pixel Art"])
-styles = {
-    "Foto-Gerçekçi": "photorealistic, 8k, highly detailed, realistic skin, cinematic lighting",
-    "Sanatsal Çizim": "oil painting style, vibrant colors, artistic brush strokes, masterpiece",
-    "3D Render": "unreal engine 5 render, octane render, 3d isometric, high detail",
-    "Pixel Art": "high quality pixel art, 128 bit, retro game style"
-}
-
-if st.button("🚀 Yüksek Kalitede Oluştur"):
-    if not user_input:
-        st.warning("⚠️ Lütfen bir açıklama yazın.")
-    else:
-        with st.status("💎 Görsel kalitesi optimize ediliyor...") as status:
-            # 1. Çeviri ve Kalite Arttırıcı Kelimeler
+if st.button("🚀 Görseli Oluştur"):
+    if user_input:
+        with st.spinner("Çiziliyor, lütfen bekleyin..."):
+            # 1. Çeviri
             eng_prompt = translate_to_english(user_input)
-            full_prompt = f"{eng_prompt}, {styles[style_choice]}"
-            seed = random.randint(0, 999999)
+            # 2. Üretim
+            img_content, current_seed = generate_image(eng_prompt)
             
-            status.write(f"🌍 İşlenen Komut: {eng_prompt}")
+            # 3. Gösterim
+            image = Image.open(io.BytesIO(img_content))
+            st.image(image, caption=f"Sonuç: {user_input}", use_container_width=True)
             
-            # 2. Yeni Nesil Yüksek Kaliteli API (Flux Pro/Realism tabanlı)
-            # Bu link doğrudan en kaliteli görsel motoruna bağlanır
-            image_url = f"https://image.pollinations.ai/prompt/{full_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
-            
-            try:
-                response = requests.get(image_url, timeout=60)
-                if response.status_code == 200:
-                    image = Image.open(io.BytesIO(response.content))
-                    st.image(image, caption=f"Sonuç: {user_input}", use_container_width=True)
-                    
-                    # İndirme
-                    buf = io.BytesIO()
-                    image.save(buf, format="PNG")
-                    st.download_button("🖼️ Yüksek Çözünürlüklü Kaydet", buf.getvalue(), f"ai_kalite_{seed}.png", "image/png")
-                    status.update(label="✅ Tasarım Başarıyla Tamamlandı!", state="complete")
-                else:
-                    st.error("Görsel oluşturulurken bir hata oluştu.")
-            except Exception as e:
-                st.error(f"Bağlantı hatası: {e}")
+            # İndirme butonu
+            st.download_button(
+                label="🖼️ Resmi Bilgisayara Kaydet",
+                data=img_content,
+                file_name=f"tasarim_{current_seed}.png",
+                mime="image/png"
+            )
+    else:
+        st.warning("Lütfen bir açıklama yazın.")
 
 st.divider()
-st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi | BT Sınıfı Uygulaması")
+st.caption("Not: Görsel beklediğiniz gibi değilse, daha fazla detay ekleyerek tekrar deneyin.")
