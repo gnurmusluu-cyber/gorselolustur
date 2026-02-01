@@ -5,66 +5,81 @@ import random
 import time
 from PIL import Image
 
-st.set_page_config(page_title="BT Tasarım Atölyesi v11", layout="centered")
+st.set_page_config(page_title="BT Profesyonel Tasarım", layout="centered")
+
+# --- SABİT AYARLAR ---
+# Bu liste, bozuk yüzlerin ve vücutların oluşmasını engeller.
+NEGATIVE_PROMPT = "ugly, deformed, noisy, blurry, distorted, out of focus, bad anatomy, extra limbs, poorly drawn face, poorly drawn hands, missing fingers, mutated, disfigured"
 
 # --- FONKSİYOMLAR ---
 
-def translate_and_enhance(text):
-    """Metni çevirir ve kaliteyi artıracak profesyonel terimler ekler."""
+def translate_to_english(text):
+    """Türkçe metni İngilizceye çevirir."""
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
-        r = requests.get(url, timeout=10)
-        translated = "".join([s[0] for s in r.json()[0]]).strip()
-        
-        # KALİTE DOPİNGİ: Bu kelimeler görselin 'korkunç' olmasını engeller
-        quality_boost = "highly detailed, digital art, masterpiece, cinematic lighting, 8k resolution, trending on artstation, sharp focus"
-        return f"{translated}, {quality_boost}"
+        r = requests.get(url, timeout=5)
+        return "".join([s[0] for s in r.json()[0]]).strip()
     except:
         return text
 
-def get_image_with_retry(full_prompt, retries=3):
+def generate_with_negative_prompt(positive_prompt):
+    """Negatif prompt desteği ile profesyonel istek atar."""
+    # Pollinations'ın gelişmiş POST servisi
+    url = "https://image.pollinations.ai/p"
     seed = random.randint(0, 999999)
-    # En güçlü model olan 'flux-pro' seçeneğini deniyoruz
-    url = f"https://image.pollinations.ai/prompt/{full_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
     
-    for i in range(retries):
-        try:
-            response = requests.get(url, timeout=120)
-            if response.status_code == 200:
-                return response.content, seed
-        except:
-            if i < retries - 1:
-                time.sleep(3)
-                continue
-    return None, None
+    # Yapay zekaya gönderilen profesyonel paket
+    payload = {
+        "prompt": positive_prompt,      # Ne istiyoruz?
+        "negative_prompt": NEGATIVE_PROMPT, # Ne İSTEMİYORUZ? (Düzgün yüzler için kritik)
+        "model": "flux",                # En kaliteli model
+        "width": 1024,
+        "height": 1024,
+        "seed": seed,
+        "nologo": True
+    }
+    
+    try:
+        # Daha sağlam bir bağlantı yöntemi (POST)
+        response = requests.post(url, json=payload, timeout=90)
+        if response.status_code == 200:
+            return response.content, seed
+        else:
+            st.error(f"Sunucu hatası: {response.status_code}")
+            return None, None
+    except Exception as e:
+        st.error(f"Bağlantı sorunu: {e}")
+        return None, None
 
 # --- ARAYÜZ ---
-st.title("🎨 Profesyonel Görsel Tasarım Merkezi")
-st.write("Daha net ve sanatsal sonuçlar için kalite filtreleri eklendi.")
+st.title("🎨 BT Sınıfı - Hatasız Görsel Motoru")
+st.info("Bu versiyon, bozuk yüzleri ve hatalı çizimleri otomatik olarak engeller.")
 
-user_input = st.text_input("Hayalindeki sahneyi anlat:", placeholder="Örn: Ormanda yürüyen görkemli bir aslan...")
+user_input = st.text_area("Ne çizmek istiyorsun?", placeholder="Örn: Parkta oynayan mutlu bir çocuk...")
 
-if st.button("🚀 Yüksek Kalitede Oluştur"):
-    if user_input:
-        with st.status("💎 Görsel optimize ediliyor ve çiziliyor...", expanded=True) as status:
-            # 1. Çeviri ve Kalite Artırma
-            enhanced_prompt = translate_and_enhance(user_input)
-            status.write(f"🌍 İşlenen Komut: {enhanced_prompt}")
+if st.button("✨ Hatasız Oluştur"):
+    if not user_input:
+        st.warning("Lütfen bir açıklama yazın.")
+    else:
+        with st.status("🛠️ Çizim yapılıyor (Yüzler düzeltiliyor)...", expanded=True) as status:
+            # 1. Çeviri
+            eng_prompt = translate_to_english(user_input)
+            # Kaliteyi artıracak ek terimler
+            full_prompt = f"{eng_prompt}, masterpiece, highly detailed, sharp focus"
+            status.write(f"🌍 İşlenen Komut: {full_prompt}")
             
-            # 2. Üretim
-            img_content, current_seed = get_image_with_retry(enhanced_prompt)
+            # 2. Üretim (Negatif Promptlu)
+            img_content, seed = generate_with_negative_prompt(full_prompt)
             
             if img_content:
                 image = Image.open(io.BytesIO(img_content))
-                st.image(image, caption="Yüksek Çözünürlüklü Sonuç", use_container_width=True)
+                st.image(image, caption="Düzeltilmiş Sonuç", use_container_width=True)
                 
                 # İndirme
-                st.download_button("🖼️ Görseli Kaydet", img_content, f"ai_art_{current_seed}.png", "image/png")
-                status.update(label="✅ Çizim Tamamlandı!", state="complete")
+                st.download_button("🖼️ Kaydet", img_content, f"temiz_gorsel_{seed}.png", "image/png")
+                status.update(label="✅ Tamamlandı!", state="complete")
             else:
-                st.error("Sunucu yanıt vermedi, lütfen tekrar deneyin.")
-    else:
-        st.warning("Lütfen bir açıklama yazın.")
+                status.update(label="❌ Başarısız Oldu", state="error")
 
 st.divider()
-st.caption("Not: Kalite artırıcı filtreler otomatik olarak uygulanmaktadır.")
+st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi")
