@@ -6,74 +6,74 @@ import time
 from PIL import Image
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="BT Tasarım Merkezi v14", layout="centered")
+st.set_page_config(page_title="BT Masal Atölyesi (Güvenli Mod)", layout="centered")
 
 # --- FONKSİYOMLAR ---
 
-def translate_and_clean(text):
-    """Metni çevirir ve net odak komutları ekler."""
+def make_it_cute_and_safe(text):
+    """Metni çevirir ve KORKUTUCU OLMAYAN, sevimli bir çizim stiline zorlar."""
     try:
+        # 1. Çeviri
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q={text}"
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=5)
         translated = "".join([s[0] for s in r.json()[0]]).strip()
         
-        # ODAK VE DERİNLİK AYARI: Ön planı netleştirir, arka planı bulanıklaştırır (Bokeh)
-        # Bu sayede arka plandaki yüzlerin bozulması önlenir.
-        focus_tags = (
-            "extreme close-up on foreground, blurred background, bokeh, "
-            "sharp focus on main subjects, realistic eyes, detailed facial features, "
-            "8k resolution, cinematic lighting, masterpiece"
+        # 2. GÜVENLİK VE STİL FİLTRESİ (Kritik Kısım)
+        # Gerçekçiliği yasaklıyoruz, sevimli illüstrasyon stilini zorluyoruz.
+        safe_style = (
+            ", children's book illustration style, cute, friendly faces, "
+            "whimsical, watercolor and ink, gentle colors, Studio Ghibli vibe, "
+            "no photorealism, not realistic, cartoon style"
         )
-        return f"{translated}, {focus_tags}"
+        return f"{translated} {safe_style}"
     except:
         return text
 
 # --- ARAYÜZ ---
-st.title("🎨 Profesyonel Görsel Atölyesi v14")
-st.write("Arka plan hatalarını önleyen 'Derinlik Odaklı' sistem.")
+st.title("🎨 BT Masal Çizim Atölyesi")
+st.write("Çocuklar için güvenli, sevimli masal kitabı tarzında çizimler.")
 
-# Session State ile hata yönetimi
+# Hata yönetimi için oturum durumu
 if 'button_disabled' not in st.session_state:
     st.session_state.button_disabled = False
 
-user_input = st.text_area("Hayalini anlat (Ön plandaki kişilere odaklan):", 
-                          placeholder="Örn: Gülümseyen bir çocuk, elinde Türk bayrağı tutuyor...")
+user_input = st.text_area("Hayalini anlat (Örn: Uçan balonla gezen mutlu bir kedi):", 
+                          placeholder="Buraya yazılan her şey sevimli bir çizime dönüşecek...")
 
-if st.button("🚀 Üretimi Başlat", disabled=st.session_state.button_disabled):
+if st.button("✨ Sevimli Çizimi Başlat", disabled=st.session_state.button_disabled):
     if user_input:
-        st.session_state.button_disabled = True # Çift tıklamayı engelle
+        st.session_state.button_disabled = True
         
-        with st.status("🔍 Görüntü işleniyor ve stabilize ediliyor...", expanded=True) as status:
-            # 1. Hazırlık
-            final_prompt = translate_and_clean(user_input)
-            seed = random.randint(1, 1000000000)
-            status.write(f"🌍 Komut optimize edildi. (Seed: {seed})")
+        with st.status("🎨 Masal kitabı sayfası hazırlanıyor...", expanded=True) as status:
+            # 1. Hazırlık ve Stil Uygulama
+            friendly_prompt = make_it_cute_and_safe(user_input)
+            seed = random.randint(1, 999999)
+            status.write("🌍 Komut sevimli hale getirildi.")
             
-            # 2. Üretim (Flux Pro Motoru)
-            image_url = f"https://image.pollinations.ai/prompt/{final_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+            # 2. Üretim (Yine FLUX kullanıyoruz ama stilini değiştirdik)
+            # 'nologo=true' ile filigranları da kaldırıyoruz ki temiz görünsün.
+            image_url = f"https://image.pollinations.ai/prompt/{friendly_prompt}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
             
             try:
-                # API'yi biraz dinlendirmek için çok kısa bir bekleme
-                time.sleep(1) 
-                response = requests.get(image_url, timeout=90)
+                time.sleep(1) # Sunucuya nefes aldır
+                response = requests.get(image_url, timeout=60)
                 
                 if response.status_code == 200:
                     image = Image.open(io.BytesIO(response.content))
-                    st.image(image, caption="Stabilize Edilmiş Sonuç", use_container_width=True)
+                    st.image(image, caption="Sevimli Masal Çizimi", use_container_width=True)
                     
-                    # İndirme
-                    st.download_button("🖼️ Görseli Bilgisayara Kaydet", response.content, f"ai_v14_{seed}.png", "image/png")
-                    status.update(label="✅ Üretim Başarılı!", state="complete")
+                    st.download_button("🖼️ Bu Resmi Kaydet", response.content, f"masal_{seed}.png", "image/png")
+                    status.update(label="✅ Çizim Bitti!", state="complete")
                 else:
-                    st.error(f"Sunucu geçici olarak yanıt vermiyor (Kod: {response.status_code}). Lütfen 10 saniye bekleyip tekrar deneyin.")
-                    status.update(label="⚠️ Hata Oluştu", state="error")
+                    st.error("Sunucu şu an yoğun, birazdan tekrar deneyelim.")
+                    status.update(label="⚠️ Geçici Yoğunluk", state="error")
             except Exception as e:
-                st.error(f"Bağlantı kesildi: {e}")
+                st.error("İnternet bağlantısında bir sorun oldu.")
                 status.update(label="❌ Bağlantı Hatası", state="error")
             
-            st.session_state.button_disabled = False # Butonu tekrar aç
+            st.session_state.button_disabled = False
     else:
-        st.warning("Lütfen bir açıklama yazın.")
+        st.warning("Lütfen bir şeyler yazın.")
 
 st.divider()
-st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi | Bilişim Teknolojileri")
+st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi | Güvenli BT Sınıfı")
