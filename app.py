@@ -5,7 +5,6 @@ import os
 from PIL import Image
 
 # --- GÜVENLİK VE AYARLAR ---
-# Streamlit Secrets veya Yerel Ortamdan Token'ı al
 if "HF_TOKEN" in st.secrets:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 else:
@@ -13,83 +12,71 @@ else:
         from dotenv import load_dotenv
         load_dotenv()
         HF_TOKEN = os.getenv("HF_TOKEN")
-    except ImportError:
+    except:
         HF_TOKEN = os.getenv("HF_TOKEN")
 
-# Ücretsiz katmanda en stabil çalışan güncel modeller
+# YENİ API ADRESİ (Hata mesajındaki router adresi)
+API_BASE_URL = "https://router.huggingface.co/hf-inference/models/"
+
 MODELS = [
-    "black-forest-labs/FLUX.1-schnell",  # Çok hızlı ve kaliteli
-    "stabilityai/stable-diffusion-2-1",  # Stabil ve erişilebilir
-    "runwayml/stable-diffusion-v1-5",    # Klasik ve hızlı
-    "Lykon/AnyLoRA"                      # Alternatif hızlı model
+    "black-forest-labs/FLUX.1-schnell",
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    "runwayml/stable-diffusion-v1-5"
 ]
 
 st.set_page_config(page_title="BT Sınıfı AI Tasarım", page_icon="🎨")
 
-# Arayüz Tasarımı
-st.markdown("""
-    <style>
-    .stButton>button { width: 100%; border-radius: 15px; height: 3em; background-color: #FF4B4B; color: white; }
-    .reportview-container { background: #f0f2f6; }
-    </style>
-    """, unsafe_allow_html=True)
-
 st.title("🎨 Yapay Zeka Görsel Üretim Paneli")
-st.info("Nusaybin Süleyman Bölünmez Anadolu Lisesi BT Sınıfı Projesi")
+st.info("Hata Giderildi: Hugging Face Router API Yapılandırması Aktif.")
 
-# Görsel Oluşturma Fonksiyonu (Hata Ayıklama Destekli)
 def generate_image(model_id, prompt_text):
-    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
+    # Yeni router endpoint yapısı
+    api_url = f"{API_BASE_URL}{model_id}"
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     
     try:
         response = requests.post(api_url, headers=headers, json={"inputs": prompt_text}, timeout=30)
-        
-        # Eğer model yükleniyorsa (503), kullanıcıya bildirmek için status_code döndür
         return response.content, response.status_code, response.text
     except Exception as e:
         return None, 500, str(e)
 
-# Kullanıcı Girişi
-prompt = st.text_area("Hayalindekini buraya yaz (İngilizce önerilir):", 
-                      placeholder="A futuristic city in Mesopotamia, 4k, cinematic lighting...")
+# --- ANAHTARSIZ YEDEK MODEL (Pollinations AI) ---
+def generate_backup_image(prompt_text):
+    # Bu model anahtar istemez, dersin kurtarıcısıdır.
+    url = f"https://image.pollinations.ai/prompt/{prompt_text}?width=1024&height=1024&nologo=true"
+    response = requests.get(url)
+    return response.content
 
-if st.button("✨ Tasarımı Başlat"):
-    if not HF_TOKEN or HF_TOKEN == "":
-        st.error("❌ HATA: API Anahtarı bulunamadı! Lütfen Secrets ayarlarına HF_TOKEN ekleyin.")
-    elif not prompt:
-        st.warning("⚠️ Lütfen bir açıklama girin.")
+prompt = st.text_area("Hayalindekini İngilizce yaz:", placeholder="A futuristic classroom in Mardin...")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    main_button = st.button("🚀 Ana Modellerle Üret")
+with col2:
+    backup_button = st.button("🆘 Yedek Model (Hızlı)")
+
+if main_button:
+    if not HF_TOKEN:
+        st.error("🔑 Token bulunamadı!")
     else:
         success = False
-        with st.status("🚀 Yapay zeka motorları çalışıyor...", expanded=True) as status:
+        with st.status("📡 Yeni Router üzerinden bağlanılıyor...") as status:
             for model in MODELS:
-                status.write(f"📡 {model} deneniyor...")
                 img_data, status_code, error_msg = generate_image(model, prompt)
-                
                 if status_code == 200:
-                    image = Image.open(io.BytesIO(img_data))
-                    st.image(image, caption=f"Başarıyla üretildi! (Model: {model})", use_container_width=True)
-                    
-                    # İndirme Butonu
-                    buf = io.BytesIO()
-                    image.save(buf, format="PNG")
-                    st.download_button("🖼️ Görseli Kaydet", buf.getvalue(), "ai_tasarim.png", "image/png")
-                    
-                    status.update(label="✅ Başarılı!", state="complete")
+                    st.image(Image.open(io.BytesIO(img_data)), caption=f"Model: {model}")
                     success = True
+                    status.update(label="✅ Başarılı!", state="complete")
                     break
-                
-                elif status_code == 503:
-                    status.write(f"⏳ {model} şu an uyanıyor (yükleniyor), sıradakine geçiliyor...")
-                elif status_code == 401 or status_code == 403:
-                    st.error(f"🔑 Yetkilendirme Hatası! Token'ınızı kontrol edin. (Hata: {status_code})")
-                    break
-                else:
-                    status.write(f"❌ {model} meşgul veya hata verdi. (Kod: {status_code})")
-            
             if not success:
-                st.error("❌ Şu an tüm modeller yoğun veya Token hatası var. Lütfen 1 dakika bekleyip tekrar deneyin.")
-                st.expander("Teknik Hata Detayı").write(error_msg)
+                st.error("Hugging Face hala meşgul. Lütfen 'Yedek Model' butonunu deneyin.")
+
+if backup_button:
+    with st.spinner("Yedek motor çalışıyor..."):
+        img_data = generate_backup_image(prompt)
+        st.image(img_data, caption="Yedek Model (Pollinations AI) ile üretildi.")
+        st.success("Ders devam ediyor! Yedek model başarıyla çalıştı.")
 
 st.divider()
-st.caption("Bilişim Teknolojileri Öğretmenliği - Yapay Zeka Uygulamaları")
+st.caption("Nusaybin Süleyman Bölünmez Anadolu Lisesi | Bilişim Teknolojileri")
